@@ -12,16 +12,34 @@ from typing import List, Dict, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import copy
 
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QLineEdit, QTextEdit, QComboBox, QSpinBox,
-    QFileDialog, QMessageBox, QProgressBar, QTabWidget, QGroupBox,
-    QCheckBox, QListWidget, QListWidgetItem, QSplitter, QFrame,
-    QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QGridLayout,
-    QSlider, QRadioButton, QButtonGroup, QColorDialog, QFontDialog
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
-from PyQt6.QtGui import QFont, QIcon, QColor, QPalette, QDesktopServices
+try:
+    from PyQt6.QtWidgets import (
+        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+        QLabel, QPushButton, QLineEdit, QTextEdit, QComboBox, QSpinBox,
+        QFileDialog, QMessageBox, QProgressBar, QTabWidget, QGroupBox,
+        QCheckBox, QListWidget, QListWidgetItem, QSplitter, QFrame,
+        QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QGridLayout,
+        QSlider, QRadioButton, QButtonGroup, QColorDialog, QFontDialog
+    )
+    from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
+    from PyQt6.QtGui import QFont, QIcon, QColor, QPalette, QDesktopServices
+    QT_IMPORT_ERROR = None
+except ImportError as exc:
+    QT_IMPORT_ERROR = exc
+
+    class _MissingQtObject:
+        pass
+
+    def pyqtSignal(*_args, **_kwargs):
+        return None
+
+    QApplication = QMainWindow = QWidget = QVBoxLayout = QHBoxLayout = _MissingQtObject
+    QLabel = QPushButton = QLineEdit = QTextEdit = QComboBox = QSpinBox = _MissingQtObject
+    QFileDialog = QMessageBox = QProgressBar = QTabWidget = QGroupBox = _MissingQtObject
+    QCheckBox = QListWidget = QListWidgetItem = QSplitter = QFrame = _MissingQtObject
+    QTableWidget = QTableWidgetItem = QHeaderView = QDialog = QGridLayout = _MissingQtObject
+    QSlider = QRadioButton = QButtonGroup = QColorDialog = QFontDialog = _MissingQtObject
+    Qt = QThread = QTimer = QUrl = QFont = QIcon = QColor = QPalette = QDesktopServices = _MissingQtObject
 
 
 # ==================== 核心AI引擎 ====================
@@ -1117,6 +1135,12 @@ output/
 
 
 def main():
+    if QT_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            "PyQt6/Qt desktop dependencies are unavailable. "
+            "Install the project dependencies and required system GUI libraries, then run again."
+        ) from QT_IMPORT_ERROR
+
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     palette = QPalette()

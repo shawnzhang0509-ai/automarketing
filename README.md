@@ -23,7 +23,7 @@ start.bat
 ## 也可以用 pip 安装后启动
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
 python -m pip install -e .
 marketing-generator
