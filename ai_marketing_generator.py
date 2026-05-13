@@ -6,9 +6,10 @@ import random
 import shutil
 import datetime
 import textwrap
+import re
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import copy
 
 from PyQt6.QtWidgets import (
@@ -19,8 +20,8 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QGridLayout,
     QSlider, QRadioButton, QButtonGroup, QColorDialog, QFontDialog
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QIcon, QColor, QPalette
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
+from PyQt6.QtGui import QFont, QIcon, QColor, QPalette, QDesktopServices
 
 
 # ==================== 核心AI引擎 ====================
@@ -114,17 +115,24 @@ class ImageTextRenderer:
     
     # 预设配色方案 (背景透明度, 文字颜色, 描边颜色)
     COLOR_SCHEMES = [
-        {'name': '经典黑底白字', 'bg': (0, 0, 0, 180), 'text': (255, 255, 255, 255), 'stroke': (0, 0, 0, 255)},
-        {'name': '白底黑字', 'bg': (255, 255, 255, 200), 'text': (0, 0, 0, 255), 'stroke': (255, 255, 255, 255)},
-        {'name': '红底白字', 'bg': (220, 53, 69, 200), 'text': (255, 255, 255, 255), 'stroke': (150, 0, 0, 255)},
-        {'name': '蓝底白字', 'bg': (0, 123, 255, 200), 'text': (255, 255, 255, 255), 'stroke': (0, 80, 180, 255)},
-        {'name': '金底黑字', 'bg': (255, 215, 0, 200), 'text': (0, 0, 0, 255), 'stroke': (180, 150, 0, 255)},
-        {'name': '紫底白字', 'bg': (111, 66, 193, 200), 'text': (255, 255, 255, 255), 'stroke': (80, 40, 150, 255)},
-        {'name': '绿底白字', 'bg': (40, 167, 69, 200), 'text': (255, 255, 255, 255), 'stroke': (20, 120, 40, 255)},
-        {'name': '透明黑字', 'bg': (0, 0, 0, 0), 'text': (0, 0, 0, 255), 'stroke': (255, 255, 255, 255)},
-        {'name': '透明白字', 'bg': (0, 0, 0, 0), 'text': (255, 255, 255, 255), 'stroke': (0, 0, 0, 255)},
+        {'name': '经典黑底白字', 'bg': (18, 22, 30, 205), 'text': (255, 255, 255, 255), 'stroke': (0, 0, 0, 230), 'accent': (255, 196, 87, 255)},
+        {'name': '白底黑字', 'bg': (255, 255, 255, 225), 'text': (23, 29, 40, 255), 'stroke': (255, 255, 255, 255), 'accent': (35, 115, 255, 255)},
+        {'name': '红底白字', 'bg': (214, 48, 49, 215), 'text': (255, 255, 255, 255), 'stroke': (122, 0, 0, 240), 'accent': (255, 221, 87, 255)},
+        {'name': '蓝底白字', 'bg': (26, 115, 232, 215), 'text': (255, 255, 255, 255), 'stroke': (0, 50, 130, 240), 'accent': (117, 214, 255, 255)},
+        {'name': '金底黑字', 'bg': (255, 210, 77, 225), 'text': (27, 31, 36, 255), 'stroke': (255, 245, 204, 255), 'accent': (120, 80, 0, 255)},
+        {'name': '紫底白字', 'bg': (111, 66, 193, 215), 'text': (255, 255, 255, 255), 'stroke': (50, 30, 100, 240), 'accent': (255, 169, 247, 255)},
+        {'name': '绿底白字', 'bg': (40, 167, 69, 215), 'text': (255, 255, 255, 255), 'stroke': (10, 95, 35, 240), 'accent': (191, 255, 129, 255)},
+        {'name': '透明黑字', 'bg': (0, 0, 0, 0), 'text': (23, 29, 40, 255), 'stroke': (255, 255, 255, 255), 'accent': (35, 115, 255, 255)},
+        {'name': '透明白字', 'bg': (0, 0, 0, 0), 'text': (255, 255, 255, 255), 'stroke': (0, 0, 0, 245), 'accent': (255, 196, 87, 255)},
     ]
     
+    STYLE_PRESETS = [
+        {'name': '现代海报卡片', 'card': True, 'shadow': True, 'accent': True, 'gradient': False, 'glass': False},
+        {'name': '强描边无底', 'card': False, 'shadow': True, 'accent': False, 'gradient': False, 'glass': False},
+        {'name': '底部渐变标题', 'card': False, 'shadow': True, 'accent': True, 'gradient': True, 'glass': False},
+        {'name': '柔和玻璃卡片', 'card': True, 'shadow': True, 'accent': True, 'gradient': False, 'glass': True},
+    ]
+
     POSITIONS = ['top', 'center', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
     
     def __init__(self):
@@ -133,25 +141,57 @@ class ImageTextRenderer:
     
     def _find_fonts(self) -> List[str]:
         """查找系统中文字体"""
+        repo_root = Path(__file__).resolve().parent
+        local_font_dirs = [
+            repo_root / "assets" / "fonts",
+            Path.cwd() / "assets" / "fonts",
+            Path.home() / "MarketingAssets" / "fonts",
+        ]
+        local_fonts = []
+        for font_dir in local_font_dirs:
+            if font_dir.exists():
+                local_fonts.extend(str(p) for p in font_dir.glob("*") if p.suffix.lower() in {".ttf", ".ttc", ".otf"})
+        
         possible_fonts = [
+            os.environ.get("MARKETING_GENERATOR_FONT", ""),
             # Windows
             "C:/Windows/Fonts/msyh.ttc",      # 微软雅黑
+            "C:/Windows/Fonts/msyhbd.ttc",    # 微软雅黑粗体
             "C:/Windows/Fonts/simhei.ttf",    # 黑体
             "C:/Windows/Fonts/simsun.ttc",    # 宋体
+            "C:/Windows/Fonts/Deng.ttf",      # 等线
             "C:/Windows/Fonts/arial.ttf",     # Arial
             # macOS
             "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
             # Linux
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf",
+            "/usr/share/fonts/truetype/noto/NotoSansSC-Bold.otf",
+            "/usr/share/fonts/truetype/arphic/ukai.ttc",
+            "/usr/share/fonts/truetype/arphic/uming.ttc",
             "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         ]
-        found = [f for f in possible_fonts if os.path.exists(f)]
+        candidates = local_fonts + [f for f in possible_fonts if f]
+        found = []
+        seen = set()
+        for font in candidates:
+            normalized = os.path.abspath(os.path.expanduser(font))
+            if normalized not in seen and os.path.exists(normalized):
+                found.append(normalized)
+                seen.add(normalized)
         return found
     
     def render_text_on_image(self, image_path: str, text: str, output_path: str,
                             position: str = 'center', scheme_idx: int = 0,
-                            font_size: int = 40, max_width_ratio: float = 0.9) -> str:
+                            font_size: int = 40, max_width_ratio: float = 0.86,
+                            style_idx: int = 0) -> str:
         """
         将文本渲染到图片上
         
@@ -163,63 +203,109 @@ class ImageTextRenderer:
             scheme_idx: 配色方案索引
             font_size: 字体大小
             max_width_ratio: 文字最大宽度占图片比例
+            style_idx: 视觉样式预设
         """
-        # 打开图片
         img = Image.open(image_path).convert("RGBA")
         width, height = img.size
-        
-        # 创建文字层
+
         text_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(text_layer)
-        
-        # 加载字体
-        try:
-            font = ImageFont.truetype(self.default_font, font_size) if self.default_font else ImageFont.load_default()
-        except:
-            font = ImageFont.load_default()
-        
-        # 获取配色方案
+
         scheme = self.COLOR_SCHEMES[scheme_idx % len(self.COLOR_SCHEMES)]
-        
-        # 处理文本换行
-        max_width = int(width * max_width_ratio)
-        wrapped_lines = self._wrap_text(draw, text, font, max_width)
-        
-        # 计算文字总高度
-        line_height = font_size + 8
-        total_text_height = len(wrapped_lines) * line_height + 40  # 上下padding各20
-        
-        # 计算位置
-        x, y = self._calculate_position(position, width, height, 
-                                        max_width, total_text_height)
-        
-        # 绘制背景条
-        bg_padding = 20
-        bg_left = x - bg_padding
-        bg_top = y - bg_padding
-        bg_right = min(x + max_width + bg_padding, width)
-        bg_bottom = min(y + total_text_height + bg_padding, height)
-        
-        if scheme['bg'][3] > 0:  # 背景不透明才画
-            draw.rectangle([bg_left, bg_top, bg_right, bg_bottom], 
-                          fill=scheme['bg'])
-        
-        # 绘制文字（带描边）
-        current_y = y
+        style = self.STYLE_PRESETS[style_idx % len(self.STYLE_PRESETS)]
+        font, wrapped_lines, line_height = self._fit_text(draw, text, font_size, width, height, max_width_ratio)
+        line_widths = [self._text_width(draw, line, font) for line in wrapped_lines]
+        text_width = max(line_widths) if line_widths else 0
+        text_height = len(wrapped_lines) * line_height
+
+        padding_x = max(22, int(font.size * 0.72)) if hasattr(font, "size") else 28
+        padding_y = max(16, int(font.size * 0.55)) if hasattr(font, "size") else 22
+        margin = max(24, int(min(width, height) * 0.045))
+        card_width = min(width - margin * 2, text_width + padding_x * 2)
+        card_height = min(height - margin * 2, text_height + padding_y * 2)
+        card_x, card_y = self._calculate_position(position, width, height, card_width, card_height, margin)
+        card_box = [card_x, card_y, card_x + card_width, card_y + card_height]
+
+        if style['gradient']:
+            gradient_top = max(0, int(height * 0.48))
+            self._draw_bottom_gradient(text_layer, width, height, gradient_top, (0, 0, 0), 210)
+            card_y = max(card_y, height - card_height - margin)
+            card_box = [card_x, card_y, card_x + card_width, card_y + card_height]
+
+        if style['shadow'] and style['card']:
+            self._draw_shadow(text_layer, card_box, radius=max(16, padding_y), opacity=95 if style['card'] else 45)
+
+        if style['card'] and scheme['bg'][3] > 0:
+            radius = max(18, int(font.size * 0.45)) if hasattr(font, "size") else 20
+            fill = scheme['bg']
+            if style['glass']:
+                fill = (fill[0], fill[1], fill[2], min(165, fill[3]))
+            self._rounded_rectangle(draw, card_box, radius=radius, fill=fill)
+
+        if style['accent']:
+            accent_height = max(5, int(font.size * 0.12)) if hasattr(font, "size") else 6
+            accent_box = [
+                card_x + padding_x,
+                card_y + card_height - padding_y + accent_height,
+                min(card_x + card_width - padding_x, card_x + padding_x + max(int(card_width * 0.28), 70)),
+                card_y + card_height - padding_y + accent_height * 2,
+            ]
+            self._rounded_rectangle(draw, accent_box, radius=accent_height, fill=scheme.get('accent', scheme['text']))
+
+        align = self._alignment_for_position(position)
+        stroke_width = max(2, int(font.size * (0.055 if style['card'] else 0.075))) if hasattr(font, "size") else 2
+        current_y = card_y + padding_y
         for line in wrapped_lines:
-            # 描边
-            for dx, dy in [(-1,-1), (-1,1), (1,-1), (1,1), (0,-1), (0,1), (-1,0), (1,0)]:
-                draw.text((x+dx, current_y+dy), line, font=font, fill=scheme['stroke'])
-            # 主文字
-            draw.text((x, current_y), line, font=font, fill=scheme['text'])
+            line_width = self._text_width(draw, line, font)
+            if align == "left":
+                x = card_x + padding_x
+            elif align == "right":
+                x = card_x + card_width - padding_x - line_width
+            else:
+                x = card_x + (card_width - line_width) // 2
+            shadow_offset = max(2, stroke_width)
+            draw.text((x + shadow_offset, current_y + shadow_offset), line, font=font, fill=(0, 0, 0, 105))
+            draw.text(
+                (x, current_y),
+                line,
+                font=font,
+                fill=scheme['text'],
+                stroke_width=stroke_width,
+                stroke_fill=scheme['stroke'],
+            )
             current_y += line_height
-        
-        # 合并图层
+
         result = Image.alpha_composite(img, text_layer)
         result = result.convert("RGB")
         result.save(output_path, "JPEG", quality=95)
         
         return output_path
+
+    def _load_font(self, size: int):
+        try:
+            return ImageFont.truetype(self.default_font, size) if self.default_font else ImageFont.load_default()
+        except Exception:
+            return ImageFont.load_default()
+
+    def _fit_text(self, draw: ImageDraw.Draw, text: str, font_size: int,
+                  img_w: int, img_h: int, max_width_ratio: float):
+        max_height = int(img_h * 0.48)
+        size = max(18, min(font_size, int(img_h * 0.13)))
+        min_size = max(16, int(img_h * 0.035))
+
+        while size >= min_size:
+            font = self._load_font(size)
+            max_width = max(80, int(img_w * max_width_ratio) - max(48, int(size * 1.6)))
+            wrapped_lines = self._wrap_text(draw, text, font, max_width)
+            line_height = self._line_height(font)
+            total_height = len(wrapped_lines) * line_height
+            if total_height <= max_height or size == min_size:
+                return font, wrapped_lines, line_height
+            size -= 2
+
+        font = self._load_font(min_size)
+        max_width = max(80, int(img_w * max_width_ratio) - max(48, int(min_size * 1.6)))
+        return font, self._wrap_text(draw, text, font, max_width), self._line_height(font)
     
     def _wrap_text(self, draw: ImageDraw.Draw, text: str, font: ImageFont.FreeTypeFont, 
                    max_width: int) -> List[str]:
@@ -230,30 +316,42 @@ class ImageTextRenderer:
         for line in lines:
             if not line.strip():
                 continue
-                
-            words = line
+
+            tokens = self._tokenize_for_wrap(line.strip())
             current_line = ""
-            
-            for char in words:
-                test_line = current_line + char
-                bbox = draw.textbbox((0, 0), test_line, font=font)
-                if bbox[2] - bbox[0] <= max_width:
+
+            for token in tokens:
+                test_line = current_line + token
+                if self._text_width(draw, test_line, font) <= max_width:
                     current_line = test_line
                 else:
                     if current_line:
                         wrapped.append(current_line)
-                    current_line = char
+                    current_line = token.lstrip()
             
             if current_line:
                 wrapped.append(current_line)
         
         return wrapped if wrapped else [text[:50]]
+
+    def _tokenize_for_wrap(self, line: str) -> List[str]:
+        """中文逐字、英文按词换行，避免中英文混排被硬切得太碎。"""
+        tokens = []
+        for part in re.findall(r"[A-Za-z0-9_.,!?%+-]+(?:\s+|$)|\s+|.", line):
+            tokens.append(part)
+        return tokens
+
+    def _text_width(self, draw: ImageDraw.Draw, text: str, font) -> int:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return bbox[2] - bbox[0]
+
+    def _line_height(self, font) -> int:
+        bbox = font.getbbox("国Agy")
+        return int((bbox[3] - bbox[1]) * 1.32)
     
     def _calculate_position(self, position: str, img_w: int, img_h: int,
-                           text_w: int, text_h: int) -> Tuple[int, int]:
+                           text_w: int, text_h: int, margin: int = 30) -> Tuple[int, int]:
         """计算文字位置"""
-        margin = 30
-        
         positions = {
             'top': (img_w // 2 - text_w // 2, margin),
             'center': (img_w // 2 - text_w // 2, img_h // 2 - text_h // 2),
@@ -265,6 +363,38 @@ class ImageTextRenderer:
         }
         
         return positions.get(position, positions['center'])
+
+    def _alignment_for_position(self, position: str) -> str:
+        if position.endswith("-left"):
+            return "left"
+        if position.endswith("-right"):
+            return "right"
+        return "center"
+
+    def _rounded_rectangle(self, draw: ImageDraw.Draw, box, radius: int, fill, outline=None, width: int = 1):
+        try:
+            draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
+        except AttributeError:
+            draw.rectangle(box, fill=fill, outline=outline, width=width)
+
+    def _draw_shadow(self, layer: Image.Image, box, radius: int, opacity: int):
+        shadow = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        shadow_draw = ImageDraw.Draw(shadow)
+        offset = max(8, radius // 2)
+        shadow_box = [box[0] + offset, box[1] + offset, box[2] + offset, box[3] + offset]
+        self._rounded_rectangle(shadow_draw, shadow_box, radius=radius, fill=(0, 0, 0, opacity))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(max(10, radius // 2)))
+        layer.alpha_composite(shadow)
+
+    def _draw_bottom_gradient(self, layer: Image.Image, width: int, height: int,
+                              top_y: int, color: Tuple[int, int, int], max_alpha: int):
+        gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        gradient_draw = ImageDraw.Draw(gradient)
+        span = max(1, height - top_y)
+        for y in range(top_y, height):
+            alpha = int(max_alpha * ((y - top_y) / span))
+            gradient_draw.line([(0, y), (width, y)], fill=(color[0], color[1], color[2], alpha))
+        layer.alpha_composite(gradient)
 
 
 class ContentMixer:
@@ -316,7 +446,7 @@ class ContentMixer:
     
     def generate_combinations(self, mode: str, count: int, variants_per_text: int = 3,
                              text_position: str = 'center', color_scheme: int = 0,
-                             font_size: int = 40) -> List[Dict]:
+                             font_size: int = 40, style_preset: int = 0) -> List[Dict]:
         """生成组合素材"""
         results = []
         
@@ -341,7 +471,11 @@ class ContentMixer:
                 'render_params': {
                     'position': text_position,
                     'color_scheme': color_scheme,
-                    'font_size': font_size
+                    'color_scheme_name': ImageTextRenderer.COLOR_SCHEMES[color_scheme % len(ImageTextRenderer.COLOR_SCHEMES)]['name'],
+                    'font_size': font_size,
+                    'style_preset': style_preset,
+                    'style_preset_name': ImageTextRenderer.STYLE_PRESETS[style_preset % len(ImageTextRenderer.STYLE_PRESETS)]['name'],
+                    'font_name': os.path.basename(self.renderer.default_font) if self.renderer.default_font else 'Pillow default'
                 }
             }
             
@@ -352,15 +486,16 @@ class ContentMixer:
                 combination['rendered_images'] = []
                 
                 # 为每个变体生成压图
-                for variant in variants[:2]:  # 最多为前2个变体压图，避免太多
+                for variant_idx, variant in enumerate(variants[:2], 1):  # 最多为前2个变体压图，避免太多
                     for img in selected_images[:1]:  # 每张图只压一次
-                        output_img = self.output_folder / f"{combination['id']}_rendered_{img.stem}.jpg"
+                        output_img = self.output_folder / f"{combination['id']}_rendered_v{variant_idx}_{img.stem}.jpg"
                         try:
                             self.renderer.render_text_on_image(
                                 str(img), variant, str(output_img),
                                 position=text_position,
                                 scheme_idx=color_scheme,
-                                font_size=font_size
+                                font_size=font_size,
+                                style_idx=style_preset
                             )
                             combination['rendered_images'].append(str(output_img.name))
                         except Exception as e:
@@ -390,7 +525,7 @@ class GenerationWorker(QThread):
     error = pyqtSignal(str)
     
     def __init__(self, mixer: ContentMixer, mode: str, count: int, variants: int,
-                 position: str, scheme: int, font_size: int, output_base: str):
+                 position: str, scheme: int, font_size: int, style_preset: int, output_base: str):
         super().__init__()
         self.mixer = mixer
         self.mode = mode
@@ -399,6 +534,7 @@ class GenerationWorker(QThread):
         self.position = position
         self.scheme = scheme
         self.font_size = font_size
+        self.style_preset = style_preset
         self.output_base = Path(output_base)
         self._is_running = True
     
@@ -407,7 +543,7 @@ class GenerationWorker(QThread):
             self.status.emit("正在生成素材组合...")
             combinations = self.mixer.generate_combinations(
                 self.mode, self.count, self.variants,
-                self.position, self.scheme, self.font_size
+                self.position, self.scheme, self.font_size, self.style_preset
             )
             
             if not combinations:
@@ -447,8 +583,10 @@ class GenerationWorker(QThread):
                     f.write(f"生成模式: {combo['mode']}\n")
                     f.write(f"生成时间: {combo['timestamp']}\n")
                     f.write(f"渲染参数: 位置={combo['render_params']['position']}, "
-                           f"配色={combo['render_params']['color_scheme']}, "
-                           f"字号={combo['render_params']['font_size']}\n")
+                           f"配色={combo['render_params']['color_scheme_name']}, "
+                           f"样式={combo['render_params']['style_preset_name']}, "
+                           f"字号={combo['render_params']['font_size']}, "
+                           f"字体={combo['render_params']['font_name']}\n")
                     f.write("=" * 50 + "\n\n")
                     for j, variant in enumerate(combo['variants'], 1):
                         f.write(f"【变体 {j}】\n{variant}\n\n")
@@ -502,7 +640,7 @@ class GenerationWorker(QThread):
 class MarketingGeneratorApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AI Marketing素材生成器 v2.0 - 智能压图版")
+        self.setWindowTitle("AI Marketing素材生成器 v2.1 - 海报压图版")
         self.setMinimumSize(1400, 900)
         
         # 默认路径
@@ -630,6 +768,16 @@ class MarketingGeneratorApp(QMainWindow):
         self.scheme_combo.setCurrentIndex(0)
         scheme_layout.addWidget(self.scheme_combo)
         render_layout.addLayout(scheme_layout)
+
+        # 视觉样式
+        style_layout = QHBoxLayout()
+        style_layout.addWidget(QLabel("视觉样式:"))
+        self.style_combo = QComboBox()
+        for preset in ImageTextRenderer.STYLE_PRESETS:
+            self.style_combo.addItem(preset['name'])
+        self.style_combo.setCurrentIndex(0)
+        style_layout.addWidget(self.style_combo)
+        render_layout.addLayout(style_layout)
         
         # 字体大小
         font_layout = QHBoxLayout()
@@ -833,7 +981,7 @@ output/
             self.refresh_assets()
     
     def open_folders(self):
-        os.startfile(str(self.base_folder))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.base_folder)))
     
     def refresh_assets(self):
         self.mixer = ContentMixer(
@@ -870,6 +1018,7 @@ output/
         position = self.pos_combo.currentText()
         scheme = self.scheme_combo.currentIndex()
         font_size = self.font_spin.value()
+        style_preset = self.style_combo.currentIndex()
         
         self.btn_generate.setEnabled(False)
         self.btn_stop.setEnabled(True)
@@ -877,7 +1026,7 @@ output/
         
         self.worker = GenerationWorker(
             self.mixer, mode, count, variants,
-            position, scheme, font_size,
+            position, scheme, font_size, style_preset,
             str(self.output_folder)
         )
         self.worker.progress.connect(self.progress_bar.setValue)
