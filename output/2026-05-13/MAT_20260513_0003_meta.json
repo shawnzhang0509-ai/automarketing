@@ -1,0 +1,23 @@
+{
+  "id": "MAT_20260513_0003",
+  "base_text_file": "1.txt",
+  "variants": [
+    "❓ 为什么good，可靠？\n✅ 因为可靠的为您带来卓越体验\n🎯 立即了解详情",
+    "你知道吗？good。为您带来卓越体验，值得信赖，立即了解详情",
+    "🔥 good... 为您带来卓越体验。现在就立即了解详情！"
+  ],
+  "mode": "文本+图片(压图)",
+  "timestamp": "2026-05-13T13:42:22.217133",
+  "render_params": {
+    "position": "center",
+    "color_scheme": 0,
+    "font_size": 40
+  },
+  "images": [
+    "C:\\Users\\zhang\\Desktop\\Marketingassets\\images\\2235317674.jpg"
+  ],
+  "rendered_images": [
+    "MAT_20260513_0003_rendered_2235317674.jpg",
+    "MAT_20260513_0003_rendered_2235317674.jpg"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "MAT_20260513_0007",
+  "base_text_file": "1.txt",
+  "variants": [
+    "🔥 立即的good... 为您带来卓越体验，最后机会。现在就立即了解详情！",
+    "good... 抢购的为您带来卓越体验。现在就立即了解详情！",
+    "💡 🔥 good 🔥\n\n为您带来卓越体验\n\n👉 立即了解详情"
+  ],
+  "mode": "文本+图片(压图)",
+  "timestamp": "2026-05-13T13:42:22.416917",
+  "render_params": {
+    "position": "center",
+    "color_scheme": 0,
+    "font_size": 40
+  },
+  "images": [
+    "C:\\Users\\zhang\\Desktop\\Marketingassets\\images\\2235317674.jpg"
+  ],
+  "rendered_images": [
+    "MAT_20260513_0007_rendered_2235317674.jpg",
+    "MAT_20260513_0007_rendered_2235317674.jpg"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "MAT_20260513_0006",
+  "base_text_file": "1.txt",
+  "variants": [
+    "💎 【温暖的good】为您带来卓越体验。立即了解详情",
+    "good，为您带来卓越体验，立即了解详情",
+    "good，安心... 为您带来卓越体验。现在就立即了解详情！"
+  ],
+  "mode": "文本+图片(压图)",
+  "timestamp": "2026-05-13T13:42:22.369506",
+  "render_params": {
+    "position": "center",
+    "color_scheme": 0,
+    "font_size": 40
+  },
+  "images": [
+    "C:\\Users\\zhang\\Desktop\\Marketingassets\\images\\2235317674.jpg"
+  ],
+  "rendered_images": [
+    "MAT_20260513_0006_rendered_2235317674.jpg",
+    "MAT_20260513_0006_rendered_2235317674.jpg"
+  ]
+}
