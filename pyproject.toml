@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-marketing-generator"
+version = "2.1.0"
+description = "AI marketing copy and poster image generator with a PyQt desktop UI."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "Pillow",
+    "PyQt6",
+]
+
+[project.scripts]
+marketing-generator = "ai_marketing_generator:main"
+
+[tool.setuptools]
+py-modules = ["ai_marketing_generator"]
