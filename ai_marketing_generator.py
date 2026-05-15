@@ -933,28 +933,31 @@ class GenerationWorker(QThread):
 # ==================== GUI界面 ====================
 
 class MarketingGeneratorApp(QMainWindow):
+    CONFIG_FILE = Path.home() / ".ai_marketing_generator.json"
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AI Marketing Generator v2.2 - Facebook Ad Creatives")
         self.setMinimumSize(1400, 900)
-        
-        # 默认路径
-        self.base_folder = Path.home() / "MarketingAssets"
-        self.text_folder = self.base_folder / "texts"
-        self.image_folder = self.base_folder / "images"
-        self.video_folder = self.base_folder / "videos"
-        self.output_folder = self.base_folder / "output"
-        self.temp_folder = self.base_folder / "temp"
-        
-        for folder in [self.text_folder, self.image_folder, self.video_folder, 
-                       self.output_folder, self.temp_folder]:
-            folder.mkdir(parents=True, exist_ok=True)
+
+        self.base_folder = self._load_saved_base_folder()
+        self.text_folder = None
+        self.image_folder = None
+        self.video_folder = None
+        self.output_folder = None
+        self.temp_folder = None
+        if self.base_folder:
+            self._configure_asset_paths(self.base_folder)
         
         self.mixer = None
         self.worker = None
         
         self.init_ui()
-        self.refresh_assets()
+        if self.base_folder:
+            self.refresh_assets()
+        else:
+            self.refresh_assets()
+            QTimer.singleShot(0, self.change_base_folder)
     
     def init_ui(self):
         central = QWidget()
@@ -970,6 +973,53 @@ class MarketingGeneratorApp(QMainWindow):
         splitter.setSizes([450, 950])
         
         main_layout.addWidget(splitter)
+
+    def _load_saved_base_folder(self) -> Optional[Path]:
+        try:
+            if not self.CONFIG_FILE.exists():
+                return None
+            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            folder = data.get('asset_root')
+            if not folder:
+                return None
+            path = Path(folder).expanduser()
+            return path if path.exists() and path.is_dir() else None
+        except Exception:
+            return None
+
+    def _save_base_folder(self):
+        if not self.base_folder:
+            return
+        try:
+            with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump({'asset_root': str(self.base_folder)}, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Failed to save app settings: {e}")
+
+    def _configure_asset_paths(self, base_folder: Path):
+        self.base_folder = Path(base_folder).expanduser()
+        self.text_folder = self._preferred_asset_folder("texts")
+        self.image_folder = self._preferred_asset_folder("images")
+        self.video_folder = self._preferred_asset_folder("videos")
+        self.output_folder = self.base_folder / "output"
+        self.temp_folder = self.base_folder / ".marketing_generator_temp"
+
+    def _preferred_asset_folder(self, subfolder_name: str) -> Path:
+        candidate = self.base_folder / subfolder_name
+        return candidate if candidate.exists() and candidate.is_dir() else self.base_folder
+
+    def _path_text(self, path: Optional[Path]) -> str:
+        return str(path) if path else "Not selected"
+
+    def _update_path_labels(self):
+        if not hasattr(self, 'path_labels'):
+            return
+        self.path_labels['base'].setText(self._path_text(self.base_folder))
+        self.path_labels['text'].setText(self._path_text(self.text_folder))
+        self.path_labels['image'].setText(self._path_text(self.image_folder))
+        self.path_labels['video'].setText(self._path_text(self.video_folder))
+        self.path_labels['output'].setText(self._path_text(self.output_folder))
     
     def create_left_panel(self) -> QWidget:
         panel = QWidget()
@@ -981,11 +1031,11 @@ class MarketingGeneratorApp(QMainWindow):
         
         self.path_labels = {}
         paths = [
-            ('base', 'Root', str(self.base_folder)),
-            ('text', 'Copy assets', str(self.text_folder)),
-            ('image', 'Images', str(self.image_folder)),
-            ('video', 'Videos', str(self.video_folder)),
-            ('output', 'Output', str(self.output_folder))
+            ('base', 'Selected asset folder', self._path_text(self.base_folder)),
+            ('text', 'Copy source', self._path_text(self.text_folder)),
+            ('image', 'Image source', self._path_text(self.image_folder)),
+            ('video', 'Video source', self._path_text(self.video_folder)),
+            ('output', 'Output', self._path_text(self.output_folder))
         ]
         
         for i, (key, label, path) in enumerate(paths):
@@ -996,7 +1046,7 @@ class MarketingGeneratorApp(QMainWindow):
             self.path_labels[key] = lbl
             folder_layout.addWidget(lbl, i, 1)
         
-        btn_change = QPushButton("Change root folder")
+        btn_change = QPushButton("Select asset folder")
         btn_change.clicked.connect(self.change_base_folder)
         folder_layout.addWidget(btn_change, len(paths), 0, 1, 2)
         
@@ -1254,31 +1304,34 @@ output/
         return panel
     
     def change_base_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Choose asset root folder", str(self.base_folder))
+        start_folder = str(self.base_folder) if self.base_folder else str(Path.home())
+        folder = QFileDialog.getExistingDirectory(self, "Choose asset folder", start_folder)
         if folder:
-            self.base_folder = Path(folder)
-            self.text_folder = self.base_folder / "texts"
-            self.image_folder = self.base_folder / "images"
-            self.video_folder = self.base_folder / "videos"
-            self.output_folder = self.base_folder / "output"
-            self.temp_folder = self.base_folder / "temp"
-            
-            for folder in [self.text_folder, self.image_folder, self.video_folder, 
-                           self.output_folder, self.temp_folder]:
-                folder.mkdir(parents=True, exist_ok=True)
-            
-            self.path_labels['base'].setText(str(self.base_folder))
-            self.path_labels['text'].setText(str(self.text_folder))
-            self.path_labels['image'].setText(str(self.image_folder))
-            self.path_labels['video'].setText(str(self.video_folder))
-            self.path_labels['output'].setText(str(self.output_folder))
-            
+            self._configure_asset_paths(Path(folder))
+            self._save_base_folder()
+            self._update_path_labels()
             self.refresh_assets()
     
     def open_folders(self):
+        if not self.base_folder:
+            self.change_base_folder()
+            return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.base_folder)))
     
     def refresh_assets(self):
+        if not self.base_folder:
+            self.mixer = None
+            self.status_texts.setText("Copy files: select an asset folder")
+            self.status_images.setText("Images: select an asset folder")
+            self.status_videos.setText("Videos: select an asset folder")
+            self.status_fonts.setText("Font: select an asset folder")
+            for lbl in [self.status_texts, self.status_images, self.status_videos, self.status_fonts]:
+                lbl.setStyleSheet("color: orange;")
+            self._update_path_labels()
+            return
+
+        self._configure_asset_paths(self.base_folder)
+        self._update_path_labels()
         self.mixer = ContentMixer(
             str(self.text_folder), 
             str(self.image_folder), 
@@ -1303,8 +1356,21 @@ output/
         self.status_videos.setStyleSheet("color: green;" if self.mixer.videos else "color: orange;")
     
     def start_generation(self):
+        if not self.base_folder:
+            QMessageBox.warning(self, "Select asset folder", "Please choose the folder that contains your source assets first.")
+            self.change_base_folder()
+            return
+
+        self.output_folder.mkdir(parents=True, exist_ok=True)
+        self.temp_folder.mkdir(parents=True, exist_ok=True)
+        self.refresh_assets()
+
         if not self.mixer or not self.mixer.texts:
-            QMessageBox.warning(self, "Missing copy assets", "Add .txt copy assets first.\nPath: " + str(self.text_folder))
+            QMessageBox.warning(
+                self,
+                "Missing copy assets",
+                "Add .txt copy assets to the selected folder or its texts subfolder.\nPath: " + str(self.text_folder)
+            )
             return
         
         mode = self.mode_combo.currentText()
@@ -1386,7 +1452,7 @@ output/
     def load_history(self):
         self.history_table.setRowCount(0)
         
-        if not self.output_folder.exists():
+        if not self.output_folder or not self.output_folder.exists():
             return
         
         row = 0
