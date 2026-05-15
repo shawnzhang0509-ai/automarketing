@@ -1,6 +1,6 @@
 # AI Marketing 素材生成器
 
-一个桌面版素材生成工具：读取文本、图片、视频素材，批量生成营销文案变体，并可把文案压到图片上输出海报图。
+一个桌面版素材生成工具：读取文本、图片、视频素材，批量生成英文 Facebook marketing 文案变体，并把文案渲染成社媒广告图。
 
 ## 快速启动
 
@@ -48,9 +48,13 @@ marketing-generator
 MARKETING_GENERATOR_FONT=/path/to/font.ttf marketing-generator
 ```
 
-## 本次视觉升级
+## Facebook ad creative 升级
 
-- 新增「视觉样式」：现代海报卡片、强描边无底、底部渐变标题、柔和玻璃卡片。
+- 文案生成改为英文 Facebook ad 结构：badge / headline / benefit / CTA。
+- 新增 Facebook feed 风格：Offer Card、Dark Gradient CTA、Premium Minimal。
+- 不再使用 emoji 当图标，改用矢量 tag/check/arrow，避免出现方块乱码。
+- 默认压图位置改为 bottom-left，更少遮挡主体。
+- 色彩方案升级为广告常用 palette：Meta Blue、Direct Deal Orange、Premium Black Gold 等。
 - 改善中文字体搜索，优先使用自定义字体、系统中文字体，再兜底到系统默认字体。
 - 压图文字会按图片尺寸自适应换行和缩小字号，减少溢出。
 - 增加圆角卡片、投影、描边、文字阴影和强调线，成品更像社媒海报。
