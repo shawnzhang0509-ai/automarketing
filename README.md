@@ -31,18 +31,33 @@ marketing-generator
 
 ## 素材目录
 
-首次启动会自动创建：
+首次启动不会再自动创建一整套素材目录。程序会让你选择一个已有素材 folder，并记住这个选择；下次运行 `start.bat` 会直接使用上次选择的目录。
+
+推荐两种放法：
+
+### 简单放法：所有素材放一个 folder
 
 ```text
-~/MarketingAssets/
-├── texts/    # 放 .txt 文案素材
-├── images/   # 放 jpg/png/webp 等图片
-├── videos/   # 放 mp4/mov 等视频
-├── fonts/    # 可选：放自定义中文字体 .ttf/.ttc/.otf
-└── output/   # 生成结果
+MyAssets/
+├── ad-copy.txt
+├── product-01.jpg
+├── product-02.png
+└── demo.mp4
 ```
 
-如果要改善中文字体效果，推荐把常用中文字体放到 `~/MarketingAssets/fonts/` 或项目内 `assets/fonts/`。也可以用环境变量指定：
+### 分类放法：用子目录管理
+
+```text
+MyAssets/
+├── texts/    # .txt ad copy
+├── images/   # jpg/png/webp images
+├── videos/   # mp4/mov videos
+└── output/   # generated results, created only when generating
+```
+
+如果你想换素材目录，点击界面里的 `Select asset folder`。
+
+如果要指定字体，可以用环境变量：
 
 ```bash
 MARKETING_GENERATOR_FONT=/path/to/font.ttf marketing-generator
